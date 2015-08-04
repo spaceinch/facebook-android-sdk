@@ -20,15 +20,12 @@
 
 package com.facebook;
 
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
-import android.database.Cursor;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.util.Base64;
 import android.util.Log;
@@ -67,6 +64,7 @@ public final class FacebookSdk {
     private static volatile String applicationId;
     private static volatile String applicationName;
     private static volatile String appClientToken;
+    private static volatile int webDialogTheme;
     private static final String FACEBOOK_COM = "facebook.com";
     private static volatile String facebookDomain = FACEBOOK_COM;
     private static AtomicLong onProgressThreshold = new AtomicLong(65536);
@@ -118,6 +116,11 @@ public final class FacebookSdk {
      */
     public static final String CLIENT_TOKEN_PROPERTY = "com.facebook.sdk.ClientToken";
 
+    /**
+     * The key for the web dialog theme in the Android manifest.
+     */
+    public static final String WEB_DIALOG_THEME = "com.facebook.sdk.WebDialogTheme";
+
     private static Boolean sdkInitialized = false;
 
     /**
@@ -132,6 +135,24 @@ public final class FacebookSdk {
     public static synchronized void sdkInitialize(
             Context applicationContext,
             int callbackRequestCodeOffset) {
+        sdkInitialize(applicationContext, callbackRequestCodeOffset, null);
+    }
+
+    /**
+     * This function initializes the Facebook SDK, the behavior of Facebook SDK functions are
+     * undetermined if this function is not called. It should be called as early as possible.
+     * @param applicationContext The application context
+     * @param callbackRequestCodeOffset The request code offset that Facebook activities will be
+     *                                  called with. Please do not use the range between the
+     *                                  value you set and another 100 entries after it in your
+     *                                  other requests.
+     * @param callback A callback called when initialize finishes. This will be called even if the
+     *                 sdk is already initialized.
+     */
+    public static synchronized void sdkInitialize(
+            Context applicationContext,
+            int callbackRequestCodeOffset,
+            final InitializeCallback callback) {
         if (sdkInitialized && callbackRequestCodeOffset != FacebookSdk.callbackRequestCodeOffset) {
             throw new FacebookException(CALLBACK_OFFSET_CHANGED_AFTER_INIT);
         }
@@ -142,15 +163,30 @@ public final class FacebookSdk {
         sdkInitialize(applicationContext);
     }
 
-
     /**
      * This function initializes the Facebook SDK, the behavior of Facebook SDK functions are
      * undetermined if this function is not called. It should be called as early as possible.
      * @param applicationContext The application context
      */
     public static synchronized void sdkInitialize(Context applicationContext) {
-        if (sdkInitialized == true) {
-          return;
+        FacebookSdk.sdkInitialize(applicationContext, null);
+    }
+
+    /**
+     * This function initializes the Facebook SDK, the behavior of Facebook SDK functions are
+     * undetermined if this function is not called. It should be called as early as possible.
+     * @param applicationContext The application context
+     * @param callback A callback called when initialize finishes. This will be called even if the
+     *                 sdk is already initialized.
+     */
+    public static synchronized void sdkInitialize(
+            Context applicationContext,
+            final InitializeCallback callback) {
+        if (sdkInitialized) {
+            if (callback != null) {
+                callback.onInitialized();
+            }
+            return;
         }
 
         Validate.notNull(applicationContext, "applicationContext");
@@ -184,6 +220,10 @@ public final class FacebookSdk {
                             // Access token and profile went out of sync due to a network or caching
                             // issue, retry
                             Profile.fetchProfileForCurrentAccessToken();
+                        }
+
+                        if (callback != null) {
+                            callback.onInitialized();
                         }
                         return null;
                     }
@@ -505,7 +545,6 @@ public final class FacebookSdk {
      * @return the current version of the SDK
      */
     public static String getSdkVersion() {
-        Validate.sdkInitialized();
         return FacebookSdkVersion.BUILD;
     }
 
@@ -591,6 +630,10 @@ public final class FacebookSdk {
 
         if (appClientToken == null) {
             appClientToken = ai.metaData.getString(CLIENT_TOKEN_PROPERTY);
+        }
+
+        if (webDialogTheme == 0) {
+            setWebDialogTheme(ai.metaData.getInt(WEB_DIALOG_THEME));
         }
     }
 
@@ -690,6 +733,23 @@ public final class FacebookSdk {
     }
 
     /**
+     * Gets the theme used by {@link com.facebook.internal.WebDialog}
+     * @return the theme
+     */
+    public static int getWebDialogTheme() {
+        Validate.sdkInitialized();
+        return webDialogTheme;
+    }
+
+    /**
+     * Sets the theme used by {@link com.facebook.internal.WebDialog}
+     * @param theme A theme to use
+     */
+    public static void setWebDialogTheme(int theme) {
+        webDialogTheme = theme;
+    }
+
+    /**
      * Gets the cache directory to use for caching responses, etc. The default will be the value
      * returned by Context.getCacheDir() when the SDK was initialized, but it can be overridden.
      *
@@ -731,5 +791,15 @@ public final class FacebookSdk {
     public static boolean isFacebookRequestCode(int requestCode) {
         return requestCode >= callbackRequestCodeOffset
                 && requestCode < callbackRequestCodeOffset + MAX_REQUEST_CODE_RANGE;
+    }
+
+    /**
+     * Callback passed to the sdkInitialize function.
+     */
+    public interface InitializeCallback {
+        /**
+         * Called when the sdk has been initialized.
+         */
+        void onInitialized();
     }
 }

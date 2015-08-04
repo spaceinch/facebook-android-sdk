@@ -27,6 +27,7 @@ import com.facebook.FacebookTestCase;
 import org.junit.Before;
 import org.junit.Test;
 import org.robolectric.Robolectric;
+import org.robolectric.RuntimeEnvironment;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -47,7 +48,7 @@ public class LoginResultTest extends FacebookTestCase {
 
     @Before
     public void before() throws Exception {
-        FacebookSdk.sdkInitialize(Robolectric.application);
+        FacebookSdk.sdkInitialize(RuntimeEnvironment.application);
     }
 
     @Test
@@ -99,7 +100,7 @@ public class LoginResultTest extends FacebookTestCase {
 
     private LoginClient.Request createRequest(Set<String> permissions, boolean isRerequest) {
         LoginClient.Request request = new LoginClient.Request(
-                LoginBehavior.SSO_WITH_FALLBACK,
+                LoginBehavior.NATIVE_WITH_FALLBACK,
                 permissions,
                 DefaultAudience.EVERYONE,
                 "123",

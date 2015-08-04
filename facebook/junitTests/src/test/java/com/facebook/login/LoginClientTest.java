@@ -34,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.robolectric.Robolectric;
+import org.robolectric.RuntimeEnvironment;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -67,7 +68,7 @@ public class LoginClientTest extends FacebookPowerMockTestCase {
 
     @Test
     public void testReauthorizationWithSameFbidSucceeds() throws Exception {
-        FacebookSdk.sdkInitialize(Robolectric.application);
+        FacebookSdk.sdkInitialize(RuntimeEnvironment.application);
         LoginClient.Request request = createRequest(ACCESS_TOKEN);
 
         AccessToken token = new AccessToken(
@@ -112,7 +113,7 @@ public class LoginClientTest extends FacebookPowerMockTestCase {
 
         LoginClient.Request unparceledRequest = TestUtils.parcelAndUnparcel(request);
 
-        assertEquals(LoginBehavior.SSO_WITH_FALLBACK, unparceledRequest.getLoginBehavior());
+        assertEquals(LoginBehavior.NATIVE_WITH_FALLBACK, unparceledRequest.getLoginBehavior());
         assertEquals(new HashSet<String>(PERMISSIONS), unparceledRequest.getPermissions());
         assertEquals(DefaultAudience.FRIENDS, unparceledRequest.getDefaultAudience());
         assertEquals("1234", unparceledRequest.getApplicationId());
@@ -123,7 +124,7 @@ public class LoginClientTest extends FacebookPowerMockTestCase {
     @Test
     public void testResultParceling() {
         LoginClient.Request request = new LoginClient.Request(
-                LoginBehavior.SUPPRESS_SSO,
+                LoginBehavior.WEB_ONLY,
                 null,
                 DefaultAudience.EVERYONE,
                 null,
@@ -149,7 +150,7 @@ public class LoginClientTest extends FacebookPowerMockTestCase {
         LoginClient.Result unparceledResult = TestUtils.parcelAndUnparcel(result);
         LoginClient.Request unparceledRequest = unparceledResult.request;
 
-        assertEquals(LoginBehavior.SUPPRESS_SSO, unparceledRequest.getLoginBehavior());
+        assertEquals(LoginBehavior.WEB_ONLY, unparceledRequest.getLoginBehavior());
         assertEquals(new HashSet<String>(), unparceledRequest.getPermissions());
         assertEquals(DefaultAudience.EVERYONE, unparceledRequest.getDefaultAudience());
         assertEquals(null, unparceledRequest.getApplicationId());
@@ -165,7 +166,7 @@ public class LoginClientTest extends FacebookPowerMockTestCase {
 
     protected LoginClient.Request createRequest(String previousAccessTokenString) {
         return new LoginClient.Request(
-                LoginBehavior.SSO_WITH_FALLBACK,
+                LoginBehavior.NATIVE_WITH_FALLBACK,
                 new HashSet<String>(PERMISSIONS),
                 DefaultAudience.FRIENDS,
                 "1234",
