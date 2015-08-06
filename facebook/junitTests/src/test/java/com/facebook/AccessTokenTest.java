@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.robolectric.Robolectric;
+import org.robolectric.RuntimeEnvironment;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -173,7 +174,7 @@ public final class AccessTokenTest extends FacebookPowerMockTestCase {
         assertTrue(!accessToken.isExpired());
 
         Bundle cache = AccessTokenTestHelper.toLegacyCacheBundle(accessToken);
-        TestUtils.assertEqualContents(bundle, cache);
+        TestUtils.assertEqualContentsWithoutOrder(bundle, cache);
     }
 
     @Test
@@ -185,7 +186,7 @@ public final class AccessTokenTest extends FacebookPowerMockTestCase {
         LegacyTokenHelper.putToken(bundle, token);
         // no app id
 
-        FacebookSdk.sdkInitialize(Robolectric.application);
+        FacebookSdk.sdkInitialize(RuntimeEnvironment.application);
         FacebookSdk.setApplicationId(applicationId);
 
         AccessToken accessToken = AccessToken.createFromLegacyCache(bundle);

@@ -22,10 +22,21 @@ package com.facebook;
 
 import android.graphics.Bitmap;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.test.suitebuilder.annotation.LargeTest;
 
+import com.facebook.internal.GraphUtil;
+import com.facebook.share.ShareApi;
+import com.facebook.share.Sharer;
 import com.facebook.share.internal.ShareInternalUtility;
+import com.facebook.share.model.ShareOpenGraphAction;
+import com.facebook.share.model.ShareOpenGraphContent;
+import com.facebook.share.model.ShareOpenGraphObject;
+import com.facebook.share.model.SharePhoto;
+import com.facebook.share.model.SharePhotoContent;
+import com.facebook.share.model.ShareVideo;
+import com.facebook.share.model.ShareVideoContent;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,19 +50,46 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RequestTests extends FacebookTestCase {
-    private final static String TEST_OG_TYPE = "facebooksdktests:test";
+    private static final String TEST_OG_OBJECT_TYPE = "facebooksdktests:test";
+    private static final String TEST_OG_ACTION_TYPE = "facebooksdktests:run";
+    private static final long REQUEST_TIMEOUT_MILLIS = 10000;
 
     protected String[] getDefaultPermissions()
     {
-        return new String[] { "email", "publish_actions", "read_stream" };
+        return new String[] {
+                "email",
+                "publish_actions",
+                "read_stream",
+                "user_photos",
+                "user_videos" };
     };
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        AccessToken.setCurrentAccessToken(getAccessTokenForSharedUser());
+    }
+
+    @Override
+    public void tearDown() throws Exception {
+        AccessToken.setCurrentAccessToken(null);
+        super.tearDown();
+    }
 
     @LargeTest
     public void testExecuteSingleGet() {
-        final AccessToken accessToken = getAccessTokenForSharedUser();
-        GraphRequest request = new GraphRequest(accessToken, "TourEiffel");
+        Bundle parameters = new Bundle();
+        parameters.putString("fields", "location");
+
+        GraphRequest request = new GraphRequest(
+                AccessToken.getCurrentAccessToken(),
+                "TourEiffel",
+                parameters,
+                null);
         GraphResponse response = request.executeAndWait();
 
         assertTrue(response != null);
@@ -65,13 +103,14 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testBuildsUploadPhotoHttpURLConnection() throws Exception {
-        final AccessToken accessToken = getAccessTokenForSharedUser();
         Bitmap image = createTestBitmap(128);
 
-        GraphRequest request = ShareInternalUtility.newUploadPhotoRequest(
-                accessToken,
+        GraphRequest request = GraphRequest.newUploadPhotoRequest(
+                AccessToken.getCurrentAccessToken(),
+                ShareInternalUtility.MY_PHOTOS,
                 image,
                 "Test photo messsage",
+                null,
                 null);
         HttpURLConnection connection = GraphRequest.toHttpConnection(request);
 
@@ -82,14 +121,24 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecuteSingleGetUsingHttpURLConnection() throws IOException {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-        GraphRequest request = new GraphRequest(accessToken, "TourEiffel");
+        Bundle parameters = new Bundle();
+        parameters.putString("fields", "location");
+
+        GraphRequest request = new GraphRequest(
+                AccessToken.getCurrentAccessToken(),
+                "TourEiffel",
+                parameters,
+                null);
         HttpURLConnection connection = GraphRequest.toHttpConnection(request);
 
         assertEquals("gzip", connection.getRequestProperty("Content-Encoding"));
-        assertEquals("application/x-www-form-urlencoded", connection.getRequestProperty("Content-Type"));
+        assertEquals(
+                "application/x-www-form-urlencoded",
+                connection.getRequestProperty("Content-Type"));
 
-        List<GraphResponse> responses = GraphRequest.executeConnectionAndWait(connection, Arrays.asList(new GraphRequest[]{request}));
+        List<GraphResponse> responses = GraphRequest.executeConnectionAndWait(
+                connection,
+                Arrays.asList(new GraphRequest[]{request}));
         assertNotNull(responses);
         assertEquals(1, responses.size());
 
@@ -138,11 +187,10 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecuteRequestMe() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-        GraphRequest request = GraphRequest.newMeRequest(accessToken, null);
+        GraphRequest request = GraphRequest.newMeRequest(AccessToken.getCurrentAccessToken(), null);
         GraphResponse response = request.executeAndWait();
 
-        validateMeResponse(accessToken, response);
+        validateMeResponse(AccessToken.getCurrentAccessToken(), response);
     }
 
     static void validateMeResponse(AccessToken accessToken, GraphResponse response) {
@@ -156,9 +204,8 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecuteMyFriendsRequest() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
-        GraphRequest request = GraphRequest.newMyFriendsRequest(accessToken, null);
+        GraphRequest request =
+                GraphRequest.newMyFriendsRequest(AccessToken.getCurrentAccessToken(), null);
         GraphResponse response = request.executeAndWait();
 
         validateMyFriendsResponse(response);
@@ -180,13 +227,17 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecutePlaceRequestWithLocation() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
         Location location = new Location("");
         location.setLatitude(47.6204);
         location.setLongitude(-122.3491);
 
-        GraphRequest request = GraphRequest.newPlacesSearchRequest(accessToken, location, 5, 5, null, null);
+        GraphRequest request = GraphRequest.newPlacesSearchRequest(
+                AccessToken.getCurrentAccessToken(),
+                location,
+                5,
+                5,
+                null,
+                null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -203,10 +254,14 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecutePlaceRequestWithSearchText() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
         // Pass a distance without a location to ensure it is correctly ignored.
-        GraphRequest request = GraphRequest.newPlacesSearchRequest(accessToken, null, 1000, 5, "Starbucks", null);
+        GraphRequest request = GraphRequest.newPlacesSearchRequest(
+                AccessToken.getCurrentAccessToken(),
+                null,
+                1000,
+                5,
+                "Starbucks",
+                null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -223,13 +278,17 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testExecutePlaceRequestWithLocationAndSearchText() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
         Location location = new Location("");
         location.setLatitude(47.6204);
         location.setLongitude(-122.3491);
 
-        GraphRequest request = GraphRequest.newPlacesSearchRequest(accessToken, location, 1000, 5, "Starbucks", null);
+        GraphRequest request = GraphRequest.newPlacesSearchRequest(
+                AccessToken.getCurrentAccessToken(),
+                location,
+                1000,
+                5,
+                "Starbucks",
+                null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -244,9 +303,122 @@ public class RequestTests extends FacebookTestCase {
         assertNotNull(response.getRawResponse());
     }
 
-    private String executePostOpenGraphRequest() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
+    @LargeTest
+    public void testShareOpenGraphContent() throws Exception {
+        ShareOpenGraphObject ogObject = new ShareOpenGraphObject.Builder()
+                .putString("og:title", "a title")
+                .putString("og:type", TEST_OG_OBJECT_TYPE)
+                .putString("og:description", "a description")
+                .build();
 
+        ShareOpenGraphAction ogAction = new ShareOpenGraphAction.Builder()
+                .setActionType(TEST_OG_ACTION_TYPE)
+                .putObject("test", ogObject)
+                .build();
+
+        ShareOpenGraphContent content = new ShareOpenGraphContent.Builder()
+                .setAction(ogAction)
+                .setPreviewPropertyName("test")
+                .build();
+
+        final ShareApi shareApi = new ShareApi(content);
+        final AtomicReference<String> actionId = new AtomicReference<>(null);
+
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                shareApi.share(new FacebookCallback<Sharer.Result>() {
+                    @Override
+                    public void onSuccess(Sharer.Result result) {
+                        actionId.set(result.getPostId());
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onCancel() {
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onError(FacebookException error) {
+                        notifyShareFinished();
+                    }
+
+                    private void notifyShareFinished() {
+                        synchronized (shareApi) {
+                            shareApi.notifyAll();
+                        }
+                    }
+                });
+            }
+        });
+
+        synchronized (shareApi) {
+            shareApi.wait(REQUEST_TIMEOUT_MILLIS);
+        }
+        assertNotNull(actionId.get());
+    }
+
+    @LargeTest
+    public void testShareOpenGraphContentWithBadType() throws Exception {
+        ShareOpenGraphObject ogObject = new ShareOpenGraphObject.Builder()
+                .putString("og:title", "a title")
+                .putString("og:type", TEST_OG_OBJECT_TYPE)
+                .putString("og:description", "a description")
+                .build();
+
+        ShareOpenGraphAction ogAction = new ShareOpenGraphAction.Builder()
+                .setActionType(TEST_OG_ACTION_TYPE+"bad")
+                .putObject("test", ogObject)
+                .build();
+
+        ShareOpenGraphContent content = new ShareOpenGraphContent.Builder()
+                .setAction(ogAction)
+                .setPreviewPropertyName("test")
+                .build();
+
+        final ShareApi shareApi = new ShareApi(content);
+        final AtomicReference<String> actionId = new AtomicReference<>(null);
+        final AtomicBoolean errorOccurred = new AtomicBoolean(false);
+
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                shareApi.share(new FacebookCallback<Sharer.Result>() {
+                    @Override
+                    public void onSuccess(Sharer.Result result) {
+                        actionId.set(result.getPostId());
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onCancel() {
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onError(FacebookException error) {
+                        errorOccurred.set(true);
+                        notifyShareFinished();
+                    }
+
+                    private void notifyShareFinished() {
+                        synchronized (shareApi) {
+                            shareApi.notifyAll();
+                        }
+                    }
+                });
+            }
+        });
+
+        synchronized (shareApi) {
+            shareApi.wait(REQUEST_TIMEOUT_MILLIS);
+        }
+        assertNull(actionId.get());
+        assertTrue(errorOccurred.get());
+    }
+
+    private String executePostOpenGraphRequest() {
         JSONObject data = new JSONObject();
         try {
             data.put("a_property", "hello");
@@ -254,15 +426,24 @@ public class RequestTests extends FacebookTestCase {
             throw new RuntimeException(e);
         }
 
-        GraphRequest request = ShareInternalUtility.newPostOpenGraphObjectRequest(
-                accessToken,
-                TEST_OG_TYPE,
+        JSONObject ogObject = GraphUtil.createOpenGraphObjectForPost(
+                TEST_OG_OBJECT_TYPE,
                 "a title",
                 "http://www.facebook.com",
                 "http://www.facebook.com/zzzzzzzzzzzzzzzzzzz",
                 "a description",
                 data,
                 null);
+
+        Bundle bundle = new Bundle();
+        bundle.putString("object", ogObject.toString());
+        GraphRequest request = new GraphRequest(
+                AccessToken.getCurrentAccessToken(),
+                "/me/objects/" + TEST_OG_OBJECT_TYPE,
+                bundle,
+                HttpMethod.POST,
+                null);
+
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -274,7 +455,7 @@ public class RequestTests extends FacebookTestCase {
 
         assertNotNull(response.getRawResponse());
 
-        return (String) graphResult.optString("id");
+        return graphResult.optString("id");
     }
 
     @LargeTest
@@ -286,8 +467,10 @@ public class RequestTests extends FacebookTestCase {
     public void testDeleteObjectRequest() {
         String id = executePostOpenGraphRequest();
 
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-        GraphRequest request = GraphRequest.newDeleteObjectRequest(accessToken, id, null);
+        GraphRequest request = GraphRequest.newDeleteObjectRequest(
+                AccessToken.getCurrentAccessToken(),
+                id,
+                null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -307,10 +490,22 @@ public class RequestTests extends FacebookTestCase {
         JSONObject data = new JSONObject();
         data.put("a_property", "goodbye");
 
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-        GraphRequest request = ShareInternalUtility.newUpdateOpenGraphObjectRequest(accessToken, id,
-                "another title", null, "http://www.facebook.com/aaaaaaaaaaaaaaaaa",
-                "another description", data, null);
+        JSONObject ogObject = GraphUtil.createOpenGraphObjectForPost(
+                TEST_OG_OBJECT_TYPE,
+                "another title",
+                null,
+                "http://www.facebook.com/aaaaaaaaaaaaaaaaa",
+                "another description",
+                data,
+                null);
+        Bundle bundle = new Bundle();
+        bundle.putString("object", ogObject.toString());
+        GraphRequest request = new GraphRequest(
+                AccessToken.getCurrentAccessToken(),
+                id,
+                bundle,
+                HttpMethod.POST,
+                null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
 
@@ -318,18 +513,20 @@ public class RequestTests extends FacebookTestCase {
 
         JSONObject result = response.getJSONObject();
         assertNotNull(result);
+        assertEquals("another title", result.optString("title"));
         assertNotNull(response.getRawResponse());
     }
 
     @LargeTest
     public void testExecuteUploadPhoto() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
         Bitmap image = createTestBitmap(128);
 
-        GraphRequest request = ShareInternalUtility.newUploadPhotoRequest(
-                accessToken,
+        GraphRequest request = GraphRequest.newUploadPhotoRequest(
+                AccessToken.getCurrentAccessToken(),
+                ShareInternalUtility.MY_PHOTOS,
                 image,
                 "Test photo message",
+                null,
                 null);
         GraphResponse response = request.executeAndWait();
         assertNotNull(response);
@@ -347,7 +544,6 @@ public class RequestTests extends FacebookTestCase {
         FileOutputStream outStream = null;
 
         try {
-            final AccessToken accessToken = getAccessTokenForSharedUser(); 
             Bitmap image = createTestBitmap(128);
 
             File outputDir = getActivity().getCacheDir(); // context being the Activity pointer
@@ -358,10 +554,12 @@ public class RequestTests extends FacebookTestCase {
             outStream.close();
             outStream = null;
 
-            GraphRequest request = ShareInternalUtility.newUploadPhotoRequest(
-                    accessToken,
+            GraphRequest request = GraphRequest.newUploadPhotoRequest(
+                    AccessToken.getCurrentAccessToken(),
+                    ShareInternalUtility.MY_PHOTOS,
                     outputFile,
                     "Test photo message",
+                    null,
                     null);
             GraphResponse response = request.executeAndWait();
             assertNotNull(response);
@@ -381,41 +579,211 @@ public class RequestTests extends FacebookTestCase {
         }
     }
 
-//    RE-ENABLE WITH ShareApi ONCE VIDEOS TEAM FIXES ENDPOINT
-//
-//    @LargeTest
-//    public void testUploadVideoFile() throws IOException, URISyntaxException {
-//        File tempFile = null;
-//        try {
-//            final AccessToken accessToken = getAccessTokenForSharedUser();
-//            tempFile = createTempFileFromAsset("DarkScreen.mov");
-//
-//            GraphRequest request = ShareInternalUtility.newUploadVideoRequest(accessToken, tempFile,
-//                    null);
-//            GraphResponse response = request.executeAndWait();
-//            assertNotNull(response);
-//
-//            assertNull(response.getError());
-//
-//            JSONObject result = response.getJSONObject();
-//            assertNotNull(result);
-//            assertNotNull(response.getRawResponse());
-//        } catch (Exception ex) {
-//            return;
-//        } finally {
-//            if (tempFile != null) {
-//                tempFile.delete();
-//            }
-//        }
-//    }
+    @LargeTest
+    public void testExecuteUploadPhotoToAlbum() throws InterruptedException, JSONException {
+        // first create an album
+        Bundle params = new Bundle();
+        params.putString("name", "Foo");
+        GraphRequest request =
+                new GraphRequest(
+                        AccessToken.getCurrentAccessToken(),
+                        "me/albums",
+                        params,
+                        HttpMethod.POST);
+
+        GraphResponse response = request.executeAndWait();
+        JSONObject jsonResponse = response.getJSONObject();
+        assertNotNull(jsonResponse);
+        String albumId = jsonResponse.optString("id");
+        assertNotNull(albumId);
+
+        // upload an image to the album
+        Bitmap image = createTestBitmap(128);
+        SharePhoto photo = new SharePhoto.Builder()
+                .setBitmap(image)
+                .setUserGenerated(true)
+                .build();
+        SharePhotoContent content = new SharePhotoContent.Builder().addPhoto(photo).build();
+        final ShareApi shareApi = new ShareApi(content);
+        shareApi.setGraphNode(albumId);
+        final AtomicReference<String> imageId = new AtomicReference<>(null);
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                shareApi.share(new FacebookCallback<Sharer.Result>() {
+                    @Override
+                    public void onSuccess(Sharer.Result result) {
+                        imageId.set(result.getPostId());
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onCancel() {
+                        notifyShareFinished();
+                    }
+
+                    @Override
+                    public void onError(FacebookException error) {
+                        notifyShareFinished();
+                    }
+
+                    private void notifyShareFinished() {
+                        synchronized (shareApi) {
+                            shareApi.notifyAll();
+                        }
+                    }
+                });
+            }
+        });
+
+        synchronized (shareApi) {
+            shareApi.wait(REQUEST_TIMEOUT_MILLIS);
+        }
+        assertNotNull(imageId.get());
+
+        // now check to see if the image is in the album
+        GraphRequest listRequest =
+                new GraphRequest(AccessToken.getCurrentAccessToken(), albumId + "/photos");
+
+        GraphResponse listResponse = listRequest.executeAndWait();
+        JSONObject listObject = listResponse.getJSONObject();
+        assertNotNull(listObject);
+        JSONArray jsonList = listObject.optJSONArray("data");
+        assertNotNull(jsonList);
+
+        boolean found = false;
+        for (int i = 0; i < jsonList.length(); i++) {
+            JSONObject imageObject = jsonList.getJSONObject(i);
+            if (imageId.get().equals(imageObject.optString("id"))) {
+                found = true;
+            }
+        }
+        assertTrue(found);
+    }
+
+    @LargeTest
+    public void testUploadVideoFile() throws IOException, URISyntaxException {
+        File tempFile = null;
+        try {
+            tempFile = createTempFileFromAsset("DarkScreen.mov");
+            ShareVideo video = new ShareVideo.Builder()
+                    .setLocalUrl(Uri.fromFile(tempFile))
+                    .build();
+            ShareVideoContent content = new ShareVideoContent.Builder().setVideo(video).build();
+            final ShareApi shareApi = new ShareApi(content);
+            final AtomicReference<String> videoId = new AtomicReference<>(null);
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    shareApi.share(new FacebookCallback<Sharer.Result>() {
+                        @Override
+                        public void onSuccess(Sharer.Result result) {
+                            videoId.set(result.getPostId());
+                            notifyShareFinished();
+                        }
+
+                        @Override
+                        public void onCancel() {
+                            notifyShareFinished();
+                        }
+
+                        @Override
+                        public void onError(FacebookException error) {
+                            notifyShareFinished();
+                        }
+
+                        private void notifyShareFinished() {
+                            synchronized (shareApi) {
+                                shareApi.notifyAll();
+                            }
+                        }
+                    });
+                }
+            });
+
+            synchronized (shareApi) {
+                shareApi.wait(REQUEST_TIMEOUT_MILLIS);
+            }
+            assertNotNull(videoId.get());
+        } catch (Exception ex) {
+            fail();
+        } finally {
+            if (tempFile != null) {
+                tempFile.delete();
+            }
+        }
+    }
+
+    @LargeTest
+    public void testUploadVideoFileToUserId() throws IOException, URISyntaxException {
+        File tempFile = null;
+        try {
+            GraphRequest meRequest =
+                    GraphRequest.newMeRequest(AccessToken.getCurrentAccessToken(), null);
+            GraphResponse meResponse = meRequest.executeAndWait();
+            JSONObject meJson = meResponse.getJSONObject();
+            assertNotNull(meJson);
+
+            String userId = meJson.optString("id");
+            assertNotNull(userId);
+
+            tempFile = createTempFileFromAsset("DarkScreen.mov");
+            ShareVideo video = new ShareVideo.Builder()
+                    .setLocalUrl(Uri.fromFile(tempFile))
+                    .build();
+            ShareVideoContent content = new ShareVideoContent.Builder().setVideo(video).build();
+            final ShareApi shareApi = new ShareApi(content);
+            shareApi.setGraphNode(userId);
+            final AtomicReference<String> videoId = new AtomicReference<>(null);
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    shareApi.share(new FacebookCallback<Sharer.Result>() {
+                        @Override
+                        public void onSuccess(Sharer.Result result) {
+                            videoId.set(result.getPostId());
+                            notifyShareFinished();
+                        }
+
+                        @Override
+                        public void onCancel() {
+                            notifyShareFinished();
+                        }
+
+                        @Override
+                        public void onError(FacebookException error) {
+                            notifyShareFinished();
+                        }
+
+                        private void notifyShareFinished() {
+                            synchronized (shareApi) {
+                                shareApi.notifyAll();
+                            }
+                        }
+                    });
+                }
+            });
+
+            synchronized (shareApi) {
+                shareApi.wait(REQUEST_TIMEOUT_MILLIS);
+            }
+            assertNotNull(videoId.get());
+        } catch (Exception ex) {
+            fail();
+        } finally {
+            if (tempFile != null) {
+                tempFile.delete();
+            }
+        }
+    }
 
     @LargeTest
     public void testPostStatusUpdate() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
         JSONObject statusUpdate = createStatusUpdate("");
 
-        JSONObject retrievedStatusUpdate = postGetAndAssert(accessToken, "me/feed",
+        JSONObject retrievedStatusUpdate = postGetAndAssert(
+                AccessToken.getCurrentAccessToken(),
+                "me/feed",
                 statusUpdate);
 
         assertEquals(statusUpdate.optString("message"), retrievedStatusUpdate.optString("message"));
@@ -442,9 +810,11 @@ public class RequestTests extends FacebookTestCase {
     public void testOnProgressCallbackIsCalled() {
         Bitmap image = Bitmap.createBitmap(128, 128, Bitmap.Config.ALPHA_8);
 
-        GraphRequest request = ShareInternalUtility.newUploadPhotoRequest(
+        GraphRequest request = GraphRequest.newUploadPhotoRequest(
                 null,
+                ShareInternalUtility.MY_PHOTOS,
                 image,
+                null,
                 null,
                 null);
         assertTrue(request != null);
@@ -470,9 +840,11 @@ public class RequestTests extends FacebookTestCase {
     public void testLastOnProgressCallbackIsCalledOnce() {
         Bitmap image = Bitmap.createBitmap(128, 128, Bitmap.Config.ALPHA_8);
 
-        GraphRequest request = ShareInternalUtility.newUploadPhotoRequest(
+        GraphRequest request = GraphRequest.newUploadPhotoRequest(
                 null,
+                ShareInternalUtility.MY_PHOTOS,
                 image,
+                null,
                 null,
                 null);
         assertTrue(request != null);
@@ -500,7 +872,7 @@ public class RequestTests extends FacebookTestCase {
         GraphRequest request = new GraphRequest(null, "me");
         GraphRequestBatch batch = new GraphRequestBatch(request);
 
-        // We assume 1 ms is short enough to fail
+        // We assume 5 ms is short enough to fail
         batch.setTimeout(1);
 
         List<GraphResponse> responses = GraphRequest.executeBatchAndWait(batch);
@@ -523,12 +895,14 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testCantUseComplexParameterInGetRequest() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
-
         Bundle parameters = new Bundle();
         parameters.putShortArray("foo", new short[1]);
 
-        GraphRequest request = new GraphRequest(accessToken, "me", parameters, HttpMethod.GET,
+        GraphRequest request = new GraphRequest(
+                AccessToken.getCurrentAccessToken(),
+                "me",
+                parameters,
+                HttpMethod.GET,
                 new ExpectFailureCallback());
         GraphResponse response = request.executeAndWait();
 
@@ -548,10 +922,14 @@ public class RequestTests extends FacebookTestCase {
 
     @LargeTest
     public void testPaging() {
-        final AccessToken accessToken = getAccessTokenForSharedUser(); 
         final List<JSONObject> returnedPlaces = new ArrayList<JSONObject>();
         GraphRequest request = GraphRequest
-                .newPlacesSearchRequest(accessToken, SEATTLE_LOCATION, 1000, 3, null,
+                .newPlacesSearchRequest(
+                        AccessToken.getCurrentAccessToken(),
+                        SEATTLE_LOCATION,
+                        1000,
+                        3,
+                        null,
                         new GraphRequest.GraphJSONArrayCallback() {
                             @Override
                             public void onCompleted(JSONArray places, GraphResponse response) {
