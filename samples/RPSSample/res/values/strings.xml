@@ -23,9 +23,12 @@
     <string name="app_name">RPSSample</string>
     <string name="facebook_app_name">Rock Paper Scissors SDK Sample</string>
     <string name="app_id">157578437735213</string>
+    <string name="fb_auto_applink_scheme">fb157578437735213</string>
+    <string name="fb_login_protocol_scheme">fb157578437735213</string>
     <string name="rock">Rock</string>
     <string name="paper">Paper</string>
     <string name="scissors">Scissors</string>
+    <string name="buy_token">Buy Token</string>
     <string name="shoot">Shoot!</string>
     <string name="win">Win!</string>
     <string name="loss">Loss</string>
@@ -40,7 +43,6 @@
     <string name="check_settings">Check Facebook Settings</string>
     <string name="friends_using_rps">Friends Rockin\' RPS</string>
     <string name="friend_activity">Friend\'s Activity</string>
-    <string name="invite_friends">Invite Friends</string>
     <string name="challenge_friends">Challenge Friends</string>
     <string name="challenge_dialog_title">Challenge a Friend</string>
     <string name="challenge_dialog_message">Please come play RPS with me!</string>
@@ -56,8 +58,7 @@
     <string name="share_with_friends_yes">Yes</string>
     <string name="share_with_friends_no">Maybe Later</string>
     <string name="error_ok_button">OK</string>
-    <string name="native_share_error">Native sharing requires the Facebook for Android
-        application.</string>
+    <string name="share_dialog_error">Can not open Share Dialog</string>
     <string name="appinvite_error">Cannot present App Invite Dialog.</string>
     <string name="error_dialog_title">Error!</string>
     <string name="login_error">An error occurred during login. Please try again.</string>
@@ -65,4 +66,17 @@
     <string name="usersettings_fragment_logged_in">Logged in</string>
     <string name="usersettings_fragment_not_logged_in">Not logged in</string>
     <string name="usersettings_fragment_logo_content_description">Facebook Logo</string>
+    <string name="navigationbat_item_game">RPSGame</string>
+    <string name="navigationbat_item_auto_applink_debug_tool">Auto Applink Debug Tool</string>
+    <string name="auto_applink_debug_tool_head">Auto Applink Debug Tool</string>
+    <string name="auto_applink_debug_tool_body">
+        Enter your FB App ID and product ID to get your auto applink.
+    </string>
+    <string name="auto_applink_app_id_placeholder">FB App ID (ex. 111222333)</string>
+    <string name="auto_applink_product_id_placeholder">Product ID (ex. 123)</string>
+    <string name="auto_applink_button_text">Send</string>
+    <string name="auto_applink_demo_title">Coffee </string>
+    <string name="auto_applink_demo_description">Description: I am auto applink coffee </string>
+    <string name="auto_applink_demo_price">Price: $10</string>
+    <string name="auto_applink_demo_data">Data:</string>
 </resources>

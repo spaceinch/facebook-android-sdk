@@ -11,6 +11,7 @@
 # generated files
 bin/
 gen/
+libs/
 
 # Local configuration file (sdk path, etc)
 local.properties
@@ -25,11 +26,18 @@ proguard/
 *.iws
 .idea/
 
+# NetBeans files
+.nb-gradle
+
 # Gradle
 .gradle
 build
 
 # Buck
+BUCK*
+.buckconfig
+.buckversion
+keystores/
 /buck-cache/
 /buck-out/
 /.buckconfig.local
@@ -40,16 +48,17 @@ build
 # vim temp files
 *.swp
 
-# Arc generated
-.phutil_module_cache
-
 *~
 *.DS_Store
 *java#
 *.settings
-.arc/
 out/
 facebook/doc/
 facebook/tests/lint.xml
-facebook/tests/assets/config.json
+facebook/src/androidTest/assets/config.json
 gradle-app.setting
+
+facebook-core/.externalNativeBuild/
+
+# i18n
+values-fb
