@@ -21,15 +21,23 @@
 package com.example.rps;
 
 import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.ComponentName;
+import com.facebook.share.model.SharePhotoContent;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentSender;
+import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
+import android.os.RemoteException;
 import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -37,7 +45,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
 
+import com.android.vending.billing.IInAppBillingService;
 import com.facebook.*;
+import com.facebook.AccessToken;
+import com.facebook.FacebookException;
+import com.facebook.internal.Utility;
 import com.facebook.login.DefaultAudience;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
@@ -54,6 +66,9 @@ import com.facebook.share.widget.AppInviteDialog;
 import com.facebook.share.widget.MessageDialog;
 import com.facebook.share.widget.ShareDialog;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -64,8 +79,6 @@ public class RpsFragment extends Fragment {
 
     private static final String SHARE_GAME_LINK = "https://developers.facebook.com/docs/android";
     private static final String SHARE_GAME_NAME = "Rock, Papers, Scissors Sample Application";
-    private static final String DEFAULT_GAME_OBJECT_TITLE =
-            "an awesome game of Rock, Paper, Scissors";
     private static final String WIN_KEY = "wins";
     private static final String LOSS_KEY = "losses";
     private static final String TIE_KEY = "ties";
@@ -79,6 +92,25 @@ public class RpsFragment extends Fragment {
     private static final int INITIAL_DELAY_MILLIS = 500;
     private static final int DEFAULT_DELAY_MILLIS = 1000;
     private static final String TAG = RpsFragment.class.getName();
+    private static final String TEST_SKU = "android.test.purchased";
+    // TOKEN_SKU should only be used for licensed test users to purchase in-app products set by
+    // developers. Please follow Google's guide for reference
+    // https://developer.android.com/google/play/billing/billing_testing.html#testing-purchases
+    private static final String TOKEN_SKU = "com.rpssample.token";
+    private static final String TOKEN_SUBSCRIPTION_SKU = "com.rpssample.tokensubs";
+    private static final String INAPP_PURCHASE_ITEM_LIST = "INAPP_PURCHASE_ITEM_LIST";
+    private static final String INAPP_PURCHASE_DATA_LIST = "INAPP_PURCHASE_DATA_LIST";
+    private static final String INAPP_DATA_SIGNATURE_LIST = "INAPP_DATA_SIGNATURE_LIST";
+    private static final String BUY_INTENT = "BUY_INTENT";
+    private static final String RESPONSE_CODE = "RESPONSE_CODE";
+
+    private static final String APP_INSTALL_TITLE = "Share with Facebook";
+    private static final String INSTALL_BUTTON = "Install or Upgrade Now";
+    private static final String CANCEL_BUTTON = "Decide Later";
+
+    public static final int BILLING_RESPONSE_RESULT_OK = 0;
+    public static final int IN_APP_PURCHASE_RESULT = 1001;
+    public static final int IN_APP_PURCHASE_VERSION = 3;
 
     private static String[] PHOTO_URIS = {null, null, null};
 
@@ -95,6 +127,7 @@ public class RpsFragment extends Fragment {
     private ImageButton fbButton;
     private TextView statsTextView;
     private ViewFlipper rpsFlipper;
+    private Button buyButton;
 
     private int wins = 0;
     private int losses = 0;
@@ -111,11 +144,14 @@ public class RpsFragment extends Fragment {
     private ShareDialog shareDialog;
     private MessageDialog messageDialog;
     private AppInviteDialog appInviteDialog;
+    private IInAppBillingService inAppBillingService;
+    private ServiceConnection serviceConnection;
+    private Context context;
 
     private DialogInterface.OnClickListener canPublishClickListener = new DialogInterface.OnClickListener() {
         @Override
         public void onClick(DialogInterface dialogInterface, int i) {
-            if (AccessToken.getCurrentAccessToken() != null) {
+            if (AccessToken.isCurrentAccessTokenActive()) {
                 // if they choose to publish, then we request for publish permissions
                 shouldImplicitlyPublish = true;
                 pendingPublish = true;
@@ -139,7 +175,7 @@ public class RpsFragment extends Fragment {
         }
     };
 
-    private class InitHandler extends Handler {
+     private class InitHandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
             if (!isResumed()) {
@@ -270,7 +306,7 @@ public class RpsFragment extends Fragment {
 
     private boolean canPublish() {
         final AccessToken accessToken = AccessToken.getCurrentAccessToken();
-        if (accessToken != null) {
+        if (AccessToken.isCurrentAccessTokenActive()) {
             if (accessToken.getPermissions().contains(ADDITIONAL_PERMISSIONS)) {
                 // if we already have publish permissions, then go ahead and publish
                 return true;
@@ -311,11 +347,8 @@ public class RpsFragment extends Fragment {
             sharePhotoBuilder.setUserGenerated(false);
             final SharePhoto gesturePhoto = sharePhotoBuilder.build();
 
-            ShareOpenGraphObject gameObject = createGameObject(gesturePhoto);
-            ShareOpenGraphAction playAction = createPlayActionWithGame(gameObject);
-            ShareOpenGraphContent content = new ShareOpenGraphContent.Builder()
-                    .setAction(playAction)
-                    .setPreviewPropertyName("game")
+            SharePhotoContent content = new SharePhotoContent.Builder()
+                    .addPhoto(gesturePhoto)
                     .build();
 
             ShareApi.share(content, new FacebookCallback<Sharer.Result>() {
@@ -336,27 +369,6 @@ public class RpsFragment extends Fragment {
                 }
             });
         }
-    }
-
-    private ShareOpenGraphObject createGameObject(final SharePhoto gesturePhoto) {
-        return new ShareOpenGraphObject.Builder()
-                .putString("og:title", DEFAULT_GAME_OBJECT_TITLE)
-                .putString("og:type", "fb_sample_rps:game")
-                .putString("fb_sample_rps:player_gesture",
-                        CommonObjects.BUILT_IN_OPEN_GRAPH_OBJECTS[playerChoice])
-                .putString("fb_sample_rps:opponent_gesture",
-                        CommonObjects.BUILT_IN_OPEN_GRAPH_OBJECTS[computerChoice])
-                .putString("fb_sample_rps:result", getString(result.getResultStringId()))
-                .putPhotoArrayList("og:image", new ArrayList<SharePhoto>() {{
-                    add(gesturePhoto);
-                }})
-                .build();
-    }
-
-    private ShareOpenGraphAction createPlayActionWithGame(ShareOpenGraphObject game) {
-        return new ShareOpenGraphAction.Builder()
-                .setActionType(OpenGraphConsts.PLAY_ACTION_TYPE)
-                .putObject("game", game).build();
     }
 
     private String getBuiltInGesture(int choice) {
@@ -399,24 +411,78 @@ public class RpsFragment extends Fragment {
                 .build();
     }
 
-    public void shareUsingNativeDialog() {
-        if (playerChoice == INVALID_CHOICE || computerChoice == INVALID_CHOICE) {
-            ShareContent content = getLinkContent();
+    // Workaround to bug where sometimes response codes come as Long instead of Integer
+    private int getResponseCodeFromBundle(Bundle b) {
+        Object o = b.get(RESPONSE_CODE);
+        if (o == null) {
+            Log.e(TAG, "Bundle with null response code, assuming OK (known issue)");
+            return BILLING_RESPONSE_RESULT_OK;
+        }
+        else if (o instanceof Integer) return ((Integer) o).intValue();
+        else if (o instanceof Long) return (int) ((Long)o).longValue();
+        else {
+            Log.e(TAG, "Unexpected type for bundle response code.");
+            Log.e(TAG, o.getClass().getName());
+            throw new RuntimeException(
+                    "Unexpected type for bundle response code: " + o.getClass().getName());
+        }
+    }
 
-            // share the app
-            if (shareDialog.canShow(content, ShareDialog.Mode.NATIVE)) {
-                shareDialog.show(content, ShareDialog.Mode.NATIVE);
-            } else {
-                showError(R.string.native_share_error);
-            }
-        } else {
-            ShareContent content = getThrowActionContent();
+    private void makePurchase(boolean isSubscription) {
+        try {
+            Bundle buyIntentBundle = inAppBillingService.getBuyIntent(
+                3,
+                getActivity().getPackageName(),
+                TEST_SKU,
+                isSubscription ? "subs" : "inapp",
+                "this is a test");
 
-            if (shareDialog.canShow(content, ShareDialog.Mode.NATIVE)) {
-                shareDialog.show(content, ShareDialog.Mode.NATIVE);
-            } else {
-                showError(R.string.native_share_error);
+            int response = getResponseCodeFromBundle(buyIntentBundle);
+            if (response != BILLING_RESPONSE_RESULT_OK) {
+                Log.e(TAG, "Unable to buy item, Error response: " + response);
+                return;
             }
+
+            PendingIntent pendingIntent = buyIntentBundle.getParcelable(BUY_INTENT);
+            getActivity().startIntentSenderForResult(
+                pendingIntent.getIntentSender(),
+                IN_APP_PURCHASE_RESULT,
+                new Intent(),
+                Integer.valueOf(0),
+                Integer.valueOf(0),
+                Integer.valueOf(0));
+        }
+        catch (IntentSender.SendIntentException e) {
+            Log.e(TAG, "In app purchase send intent exception.", e);
+        }
+        catch (RemoteException e) {
+            Log.e(TAG, "In app purchase remote exception.", e);
+        }
+    }
+
+    public void onInAppPurchaseSuccess(JSONObject jo)  {
+        String token = null;
+        try {
+            token = jo.getString("purchaseToken");
+            String packageName = jo.getString("packageName");
+            consumePurchase(token, packageName);
+        } catch (JSONException e) {
+            Log.e(TAG, "In app purchase invalid json.", e);
+        }
+    }
+
+    private void consumePurchase(String packageName, String token) {
+        try {
+            int consumeResponse = inAppBillingService.consumePurchase(
+                    IN_APP_PURCHASE_VERSION, packageName, token);
+            if (consumeResponse == 0) {
+                Log.d(TAG, "Successfully consumed package: " + packageName);
+            } else {
+                Log.d(TAG, "Faileds to consume package: " + packageName + " "
+                        + consumeResponse);
+            }
+        } catch (RemoteException e) {
+            Log.e(TAG, "Consuming purchase remote exception.", e);
         }
     }
 
@@ -427,20 +493,52 @@ public class RpsFragment extends Fragment {
             // share the app
             if (messageDialog.canShow(content)) {
                 messageDialog.show(content);
+            } else {
+                showInstallMessengerAppInGooglePlay();
             }
         } else {
             ShareContent content = getThrowActionContent();
 
             if (messageDialog.canShow(content)) {
                 messageDialog.show(content);
+            } else {
+                showInstallMessengerAppInGooglePlay();
             }
         }
     }
 
+    private void showInstallMessengerAppInGooglePlay() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(
+                getActivity());
+        builder.setCancelable(true);
+        builder.setTitle(APP_INSTALL_TITLE);
+        builder.setMessage("Install or upgrade the Messenger application on your device and " +
+                "get cool new sharing features for this application. " +
+                "What do you want to do?");
+        builder.setInverseBackgroundForced(true);
+        builder.setPositiveButton(INSTALL_BUTTON,
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String uri = "http://play.google.com/store/apps/details?id=com.facebook.orca";
+                        context.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(uri)));
+                    }
+                });
+        builder.setNegativeButton(CANCEL_BUTTON,
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                });
+        AlertDialog alert = builder.create();
+        alert.show();
+    }
+
     public void presentAppInviteDialog() {
         AppInviteContent content = new AppInviteContent.Builder()
-                .setApplinkUrl("http://hosting-rps.parseapp.com/applink.html")
-                .setPreviewImageUrl("http://hosting-rps.parseapp.com/rps-preview-image.png")
+                .setApplinkUrl("https://d3uu10x6fsg06w.cloudfront.net/hosting-rps/applink.html")
+                .setPreviewImageUrl("https://d3uu10x6fsg06w.cloudfront.net/hosting-rps/rps-preview-image.jpg")
                 .build();
         if (AppInviteDialog.canShow()) {
             appInviteDialog.show(this, content);
@@ -473,6 +571,7 @@ public class RpsFragment extends Fragment {
         fbButton = (ImageButton) view.findViewById(R.id.facebook_button);
         statsTextView = (TextView) view.findViewById(R.id.stats);
         rpsFlipper = (ViewFlipper) view.findViewById(R.id.rps_flipper);
+        buyButton = (Button) view.findViewById(R.id.buy_button);
 
         gestureImages[ROCK].setOnClickListener(new View.OnClickListener() {
             @Override
@@ -506,6 +605,13 @@ public class RpsFragment extends Fragment {
             @Override
             public void onClick(View view) {
                 getActivity().openOptionsMenu();
+            }
+        });
+
+        buyButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                makePurchase(false);
             }
         });
 
@@ -600,6 +706,61 @@ public class RpsFragment extends Fragment {
                 };
         appInviteDialog = new AppInviteDialog(this);
         appInviteDialog.registerCallback(callbackManager, appInviteCallback);
+
+        // Initialize in-app billing service
+        serviceConnection = new ServiceConnection() {
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                inAppBillingService = null;
+                Utility.logd(TAG, "In-app billing service disconnected");
+            }
+
+            @Override
+            public void onServiceConnected(
+                ComponentName name,
+                IBinder service) {
+                inAppBillingService = IInAppBillingService.Stub.asInterface(service);
+                Utility.logd(TAG, "In app billing service connected");
+                try {
+                    Bundle ownedItems = inAppBillingService.getPurchases(
+                        IN_APP_PURCHASE_VERSION,
+                        context.getPackageName(),
+                        "inapp",
+                        null);
+                    int response = ownedItems.getInt("RESPONSE_CODE");
+                    if (response == 0) {
+                        ArrayList<String> ownedSkus =
+                                ownedItems.getStringArrayList(INAPP_PURCHASE_ITEM_LIST);
+                        ArrayList<String>  purchaseDataList =
+                                ownedItems.getStringArrayList(INAPP_PURCHASE_DATA_LIST);
+                        ArrayList<String>  signatureList =
+                                ownedItems.getStringArrayList(INAPP_DATA_SIGNATURE_LIST);
+
+                        for (int i = 0; i < purchaseDataList.size(); ++i) {
+                            String purchaseData = purchaseDataList.get(i);
+
+                            try {
+                                JSONObject jo = new JSONObject(purchaseData);
+                                String token = jo.getString("purchaseToken");
+                                consumePurchase(context.getPackageName(), token);
+                            }
+                            catch (JSONException e) {
+                                Log.e(TAG, "Error parsing purchase data.", e);
+                            }
+                        }
+                    }
+                }
+                catch (RemoteException e) {
+                    Log.e(TAG, "Consuming purchase remote exception.", e);
+                }
+            }
+        };
+
+        context = this.getActivity().getApplicationContext();
+        Intent serviceIntent =
+                new Intent("com.android.vending.billing.InAppBillingService.BIND");
+        serviceIntent.setPackage("com.android.vending");
+        context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
@@ -625,5 +786,13 @@ public class RpsFragment extends Fragment {
         bundle.putSerializable(RESULT_KEY, result);
         bundle.putBoolean(PENDING_PUBLISH_KEY, pendingPublish);
         bundle.putBoolean(IMPLICIT_PUBLISH_KEY, shouldImplicitlyPublish);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (inAppBillingService != null) {
+            context.unbindService(serviceConnection);
+        }
     }
 }

@@ -34,7 +34,9 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.facebook.*;
-import com.facebook.appevents.AppEventsLogger;
+import com.facebook.AccessToken;
+import com.facebook.FacebookException;
+import com.facebook.Profile;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.ProfilePictureView;
@@ -114,7 +116,6 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        FacebookSdk.sdkInitialize(this.getApplicationContext());
 
         callbackManager = CallbackManager.Factory.create();
 
@@ -205,12 +206,6 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
-        // Call the 'activateApp' method to log an app event for use in analytics and advertising
-        // reporting.  Do so in the onResume methods of the primary Activities that an app may be
-        // launched into.
-        AppEventsLogger.activateApp(this);
-
         updateUI();
     }
 
@@ -228,23 +223,14 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-
-        // Call the 'deactivateApp' method to log an app event for use in analytics and advertising
-        // reporting.  Do so in the onPause methods of the primary Activities that an app may be
-        // launched into.
-        AppEventsLogger.deactivateApp(this);
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
         profileTracker.stopTracking();
+        LoginManager.getInstance().unregisterCallback(callbackManager);
     }
 
     private void updateUI() {
-        boolean enableButtons = AccessToken.getCurrentAccessToken() != null;
+        boolean enableButtons = AccessToken.isCurrentAccessTokenActive();
 
         postStatusUpdateButton.setEnabled(enableButtons || canPresentShareDialog);
         postPhotoButton.setEnabled(enableButtons || canPresentShareDialogWithPhotos);
@@ -324,13 +310,12 @@ public class HelloFacebookSampleActivity extends FragmentActivity {
     }
 
     private boolean hasPublishPermission() {
-        AccessToken accessToken = AccessToken.getCurrentAccessToken();
-        return accessToken != null && accessToken.getPermissions().contains("publish_actions");
+        return AccessToken.isCurrentAccessTokenActive()
+                && AccessToken.getCurrentAccessToken().getPermissions().contains("publish_actions");
     }
 
     private void performPublish(PendingAction action, boolean allowNoToken) {
-        AccessToken accessToken = AccessToken.getCurrentAccessToken();
-        if (accessToken != null || allowNoToken) {
+        if (AccessToken.isCurrentAccessTokenActive() || allowNoToken) {
             pendingAction = action;
             handlePendingAction();
         }

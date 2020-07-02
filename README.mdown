@@ -6,7 +6,7 @@ Facebook SDK for Android
 
 This open-source library allows you to integrate Facebook into your Android app.
 
-Learn more about about the provided samples, documentation, integrating the SDK into your app, accessing source code, and more at https://developers.facebook.com/docs/android
+Learn more about the provided samples, documentation, integrating the SDK into your app, accessing source code, and more at https://developers.facebook.com/docs/android
 
 TRY IT OUT
 ----------
@@ -15,23 +15,109 @@ TRY IT OUT
 
 FEATURES
 --------
-* Login - https://developers.facebook.com/docs/facebook-login
-* Sharing - https://developers.facebook.com/docs/sharing
-* App Links - https://developers.facebook.com/docs/applinks
-* Graph API - https://developers.facebook.com/docs/android/graph
-* Analytics for Apps - https://developers.facebook.com/docs/analytics
+* [Login](https://developers.facebook.com/docs/facebook-login)
+* [Sharing](https://developers.facebook.com/docs/sharing)
+* [Places](https://developers.facebook.com/docs/places)
+* [Messenger](https://developers.facebook.com/docs/messenger-expressions)
+* [App Links](https://developers.facebook.com/docs/applinks)
+* [Analytics](https://developers.facebook.com/docs/analytics)
+* [Graph API](https://developers.facebook.com/docs/android/graph)
+* [Marketing](https://developers.facebook.com/docs/app-events/marketing-kit)
+
+STRUCTURE
+---------
+The SDK is separated into modules with the following structure. Each box represents a module with an
+estimated size when included into an app (when included using proguard and supporting a single language).
+
+    +---------------------------------------------------------------+
+    |                                                               |
+    |  Facebook-android-sdk : 399.09 kb                             |
+    |                                                               |
+    +---------------------------------------------------------------+
+    +----------+ +----------+ +----------+ +-----------+ +----------+
+    |          | |          | |          | |           | |          |
+    |          | |          | |          | |           | |          |
+    | Facebook | | Facebook | | Facebook | | Facebook  | | Facebook |
+    | -Login : | | -Share : | | -Places :| |-Messenger:| |-Applinks:|
+    |          | |          | |          | |           | |          |
+    | 304.06 kb| | 310.94 kb| | 76.48 kb | | 114.26 kb | | 89.73 kb |
+    +----------+ +----------+ |          | |           | |          |
+    +-----------------------+ |          | |           | |          |
+    |                       | |          | |           | |          |
+    | Facebook-Common : N/A | |          | |           | |          |
+    |                       | |          | |           | |          |
+    +-----------------------+ +----------+ +-----------+ +----------+
+    +---------------------------------------------------------------+
+    |                                                               |
+    | Facebook-Core : 75.12 kb                                      |
+    |                                                               |
+    +---------------------------------------------------------------+
+
+Example: Including the Facebook-Login module (which depends on Facebook-Common and Facebook-Core) would
+increase your app's size by an estimated 276.94 kb and including just Facebook-Core would only increase
+your size by 52.61 kb.
+
+USAGE
+-----
+Facebook SDKs are broken up into separate modules as shown above. To ensure the most optimized use of
+space only install the modules that you intend to use. To get started, see the Installation section below.
+
+INSTALLATION
+------------
+Facebook SDKs are published to Maven as independent modules. To utilize a feature listed above
+include the appropriate dependency (or dependencies) listed below in your `app/build.gradle` file.
+```gradle
+dependencies {
+    // Facebook Core only (Analytics)
+    implementation 'com.facebook.android:facebook-core:5.0.0'
+
+    // Facebook Login only
+    implementation 'com.facebook.android:facebook-login:5.0.0'
+
+    // Facebook Share only
+    implementation 'com.facebook.android:facebook-share:5.0.0'
+
+    // Facebook Places only
+    implementation 'com.facebook.android:facebook-places:5.0.0'
+
+    // Facebook Messenger only
+    implementation 'com.facebook.android:facebook-messenger:5.0.0'
+
+    // Facebook App Links only
+    implementation 'com.facebook.android:facebook-applinks:5.0.0'
+
+    // Facebook Android SDK (everything)
+    implementation 'com.facebook.android:facebook-android-sdk:5.0.0'
+}
+```
+
+You may also need to add the following to your project/build.gradle file.
+```gradle
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+```
 
 GIVE FEEDBACK
 -------------
 Please report bugs or issues to https://developers.facebook.com/bugs/
 
-You can also join the Facebook Developers Group on Facebook (https://www.facebook.com/groups/fbdevelopers/) or ask questions on Stack Overflow (http://facebook.stackoverflow.com)
+You can also visit our [Facebook Developer Community Forum](https://developers.facebook.com/community/),
+join the [Facebook Developers Group on Facebook](https://www.facebook.com/groups/fbdevelopers/),
+ask questions on [Stack Overflow](http://facebook.stackoverflow.com),
+or open an issue in this repository.
+
+SECURITY
+--------
+See the [SECURITY POLICY](SECURITY.md) for more info on our bug bounty program.
 
 CONTRIBUTING
 -------------
 We are able to accept contributions to the Facebook SDK for Android. To contribute please do the following.
 - Follow the instructions in the [CONTRIBUTING.mdown](https://github.com/facebook/facebook-android-sdk/blob/master/CONTRIBUTING.mdown).
-- Submit your pull request to the [dev](https://github.com/facebook/facebook-android-sdk/tree/dev) branch. This allows us to merge your change into our internal master and then push out the change in the next release.
+- Submit your pull request to the [master](https://github.com/facebook/facebook-android-sdk/tree/master) branch. This allows us to merge your change into our internal master and then push out the change in the next release.
 
 LICENSE
 -------
